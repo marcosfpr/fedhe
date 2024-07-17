@@ -55,7 +55,7 @@ def aggregate_ciphertext(
     return result
 
 
-class FedSealy(fl.server.strategy.Strategy):
+class FedAvgSealy(fl.server.strategy.Strategy):
     """
     Base class for Federated Learning with SEALY.
     """
@@ -91,7 +91,7 @@ class FedSealy(fl.server.strategy.Strategy):
         self.min_evaluate_clients = min_evaluate_clients
         self.min_available_clients = min_available_clients
         self.context = context
-        self.params_size = params_size 
+        self.params_size = params_size
         self.initial_parameters = initial_parameters
         self.evaluate_fn = evaluate_fn
         self.on_fit_config_fn = on_fit_config_fn
@@ -105,6 +105,7 @@ class FedSealy(fl.server.strategy.Strategy):
 
     def num_fit_clients(self, num_available_clients: int) -> Tuple[int, int]:
         """Return the sample size and the required number of available clients."""
+        logging.info(f"num_fit_clients: {num_available_clients}")
         num_clients = int(num_available_clients * self.fraction_fit)
         return (
             max(num_clients, self.min_fit_clients),
@@ -115,6 +116,7 @@ class FedSealy(fl.server.strategy.Strategy):
         self, num_available_clients: int
     ) -> Tuple[int, int]:
         """Use a fraction of available clients for evaluation."""
+        logging.info(f"num_evaluation_clients: {num_available_clients}")
         num_clients = int(num_available_clients * self.fraction_evaluate)
         return (
             max(num_clients, self.min_evaluate_clients),
@@ -125,6 +127,7 @@ class FedSealy(fl.server.strategy.Strategy):
         self, client_manager: ClientManager
     ) -> Optional[Parameters]:
         """Initialize global model parameters."""
+        logging.info("initialize_parameters")
         initial_parameters = self.initial_parameters
         self.initial_parameters = (
             None  # Don't keep initial parameters in memory
@@ -135,6 +138,7 @@ class FedSealy(fl.server.strategy.Strategy):
         self, server_round: int, parameters: Parameters
     ) -> Optional[Tuple[float, Dict[str, Scalar]]]:
         """Evaluate model parameters using an evaluation function."""
+        logging.info(f"evaluate: {server_round}")
         if self.evaluate_fn is None:
             # No evaluation function provided
             return None
@@ -152,6 +156,7 @@ class FedSealy(fl.server.strategy.Strategy):
         client_manager: ClientManager,
     ) -> List[Tuple[ClientProxy, FitIns]]:
         """Configure the next round of training."""
+        logging.info(f"configure_fit: {server_round}")
 
         config = {}
         if self.on_fit_config_fn is not None:
@@ -178,6 +183,7 @@ class FedSealy(fl.server.strategy.Strategy):
     ) -> List[Tuple[ClientProxy, EvaluateIns]]:
         """Configure the next round of evaluation."""
         # Do not configure federated evaluation if fraction eval is 0.
+        logging.info(f"configure_evaluate: {server_round}")
         if self.fraction_evaluate == 0.0:
             return []
 
@@ -206,6 +212,7 @@ class FedSealy(fl.server.strategy.Strategy):
         failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
     ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
         """Aggregate fit results using weighted average."""
+        logging.info(f"aggregate_fit: {server_round}")
         if not results:
             return None, {}
         # Do not aggregate if there are failures and failures are not accepted
@@ -213,18 +220,31 @@ class FedSealy(fl.server.strategy.Strategy):
             return None, {}
 
         # Convert results
-        weights_results = [
-            (
-                params_to_ciphertext(self.context, fit_res.parameters),
-                fit_res.num_examples,
+        weights_results = []
+
+        for client, fit_res in results:
+            cipher_params = params_to_ciphertext(
+                self.context, fit_res.parameters
             )
-            for _, fit_res in results
-        ]
+            weights_results.append((cipher_params, fit_res.num_examples))
+            logging.info(
+                f"Client {client.cid} has {fit_res.num_examples} examples     "
+                "            and parameters in"
+                f" {len(fit_res.parameters.tensors)} chunks"
+            )
+
+        logging.info(
+            f"Aggregating parameters from {len(weights_results)} clients..."
+        )
         aggregated_ndarrays = aggregate_ciphertext(
             self.context, weights_results, self.params_size
         )
 
         parameters_aggregated = ciphertext_to_params(aggregated_ndarrays)
+        logging.info(
+            "Aggregated parameters. Total chunks: %d",
+            len(parameters_aggregated.tensors),
+        )
 
         # Aggregate custom metrics if aggregation fn was provided
         metrics_aggregated = {}
@@ -245,6 +265,7 @@ class FedSealy(fl.server.strategy.Strategy):
         failures: List[Union[Tuple[ClientProxy, EvaluateRes], BaseException]],
     ) -> Tuple[Optional[float], Dict[str, Scalar]]:
         """Aggregate evaluation losses using weighted average."""
+        logging.info(f"aggregate_evaluate: {server_round}")
         if not results:
             return None, {}
         # Do not aggregate if there are failures and failures are not accepted

@@ -1,6 +1,7 @@
 from typing import List
 
 import numpy as np
+from datasets.utils.logging import logging
 from flwr.common import Parameters
 from sealy import CiphertextBatchArray, Context
 
@@ -9,20 +10,21 @@ def ciphertext_to_params(ciphertext: CiphertextBatchArray) -> Parameters:
     """
     Convert a ciphertext to a Parameters object.
     """
-
-    batched_bytes = ciphertext.as_batched_bytes()
+    batched_bytes = [bytes(chunk) for chunk in ciphertext.as_batched_bytes()]
     return Parameters(
         tensors=batched_bytes, tensor_type="CiphertextBatchArray"
     )
 
-def params_to_ciphertext(context: Context, params: Parameters) -> CiphertextBatchArray:
+
+def params_to_ciphertext(
+    context: Context, params: Parameters
+) -> CiphertextBatchArray:
     """
     Convert a Parameters object to a ciphertext.
     """
-    cipher = CiphertextBatchArray.from_batched_bytes(
-        context, params.tensors
-    )
+    cipher = CiphertextBatchArray.from_batched_bytes(context, params.tensors)
     return cipher
+
 
 def flatten_parameters(net) -> np.ndarray:
     """
@@ -34,6 +36,7 @@ def flatten_parameters(net) -> np.ndarray:
     Returns:
     np.ndarray: A 1D NumPy array containing all model parameters.
     """
+    logging.info(f"Flattening model parameters...")
     params = [
         param.detach().cpu().numpy().flatten() for param in net.parameters()
     ]
@@ -52,7 +55,12 @@ def unflatten_parameters(net, flatten_params: np.ndarray) -> List[np.ndarray]:
     Returns:
     List[np.ndarray]: A list of NumPy arrays with the original shapes of the model parameters.
     """
+    total_params = flatten_params.shape[0]
     param_shapes = [param.shape for param in net.parameters()]
+
+    logging.info(
+        f"Unflattening {total_params} parameters with shapes: {param_shapes}"
+    )
 
     unflat_params = []
     start = 0
@@ -63,8 +71,5 @@ def unflatten_parameters(net, flatten_params: np.ndarray) -> List[np.ndarray]:
         param = param_flat.reshape(shape)
         unflat_params.append(param)
         start += num_elements
-
-    for layer in unflat_params:
-        print(layer.shape)
 
     return unflat_params

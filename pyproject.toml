@@ -4,7 +4,7 @@ requires = ["setuptools", "wheel"]
 
 [project]
 name = "fhelwr"
-version = "0.1.0"
+version = "0.1.1"
 description = "homomorphic aggregation strategies for flwr federated learning"
 requires-python = ">=3.8"
 classifiers = [
@@ -26,7 +26,7 @@ classifiers = [
 authors = [{ name = "marcos pontes", email = "mfprezende@gmail.com" }]
 maintainers = [{ name = "marcos pontes", email = "mfprezende@gmail.com" }]
 dependencies = [
-  "sealy == 0.1.3",
+  "sealy == 0.1.4",
   "flwr",
   "numpy"
 ]

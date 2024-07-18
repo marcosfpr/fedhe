@@ -26,7 +26,25 @@ def params_to_ciphertext(
     return cipher
 
 
-def flatten_parameters(net) -> np.ndarray:
+def get_torch_params(net) -> List[np.ndarray]:
+    return [
+        param.detach().cpu().numpy().flatten() for param in net.parameters()
+    ]
+
+
+def get_torch_shapes(net) -> List[np.ndarray]:
+    return [param.shape for param in net.parameters()]
+
+
+def get_tensorflow_params(net) -> List[np.ndarray]:
+    return net.get_weights()
+
+
+def get_tensorflow_shapes(net) -> List[np.ndarray]:
+    return [param.shape for param in net.get_weights()]
+
+
+def flatten_parameters(params: List[np.ndarray]) -> np.ndarray:
     """
     Flatten all parameters of the model into a single 1D NumPy array.
 
@@ -37,14 +55,13 @@ def flatten_parameters(net) -> np.ndarray:
     np.ndarray: A 1D NumPy array containing all model parameters.
     """
     logging.info(f"Flattening model parameters...")
-    params = [
-        param.detach().cpu().numpy().flatten() for param in net.parameters()
-    ]
-    flat_params = np.concatenate(params)
+    flat_params = np.concatenate([param.flatten() for param in params])
     return flat_params
 
 
-def unflatten_parameters(net, flatten_params: np.ndarray) -> List[np.ndarray]:
+def unflatten_parameters(
+    param_shapes, flatten_params: np.ndarray
+) -> List[np.ndarray]:
     """
     Unflatten the 1D NumPy array back to the original parameter shapes of the model.
 
@@ -56,7 +73,6 @@ def unflatten_parameters(net, flatten_params: np.ndarray) -> List[np.ndarray]:
     List[np.ndarray]: A list of NumPy arrays with the original shapes of the model parameters.
     """
     total_params = flatten_params.shape[0]
-    param_shapes = [param.shape for param in net.parameters()]
 
     logging.info(
         f"Unflattening {total_params} parameters with shapes: {param_shapes}"

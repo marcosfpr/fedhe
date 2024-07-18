@@ -168,7 +168,7 @@ class FheClient(SealyClient):
             .with_coefficient_modulus(modulus_chain)
             .build()
         )
-        context = Context(
+        context = Context.build(
             encryption_parameters, expand_mod_chain, security_level
         )
         return context

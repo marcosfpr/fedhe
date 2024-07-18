@@ -41,7 +41,7 @@ if __name__ == "__main__":
     )
 
     # collected from the network used in the client.
-    params_size = 65536
+    params_size = 3_972_122
 
     # Create FedAvg strategy
     strategy = FedAvgSealy(

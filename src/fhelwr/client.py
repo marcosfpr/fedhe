@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from datetime import time
 from typing import Any, Callable, Dict, List, Tuple
 
 import flwr as fl
@@ -60,35 +61,28 @@ class SealyClient(fl.client.Client, ABC):
         pass
 
     @abstractmethod
-    def get_net(self) -> Any:
-        """
-        Return the neural network used by this client.
-        """
-        pass
-
-    @abstractmethod
-    def set_params(self, net, parameters: List[np.ndarray]) -> None:
+    def set_params(self, parameters: List[np.ndarray]) -> None:
         """
         Load the parameters into the neural network.
         """
         pass
 
     @abstractmethod
-    def get_params(self, net) -> List[np.ndarray]:
+    def get_params(self) -> List[np.ndarray]:
         """
         Get the parameters of the neural network.
         """
         pass
 
     @abstractmethod
-    def get_params_shape(self, net) -> List[np.ndarray]:
+    def get_params_shape(self) -> List[np.ndarray]:
         """
         Get the shapes of the parameters of the neural network.
         """
         pass
 
     @abstractmethod
-    def train(self, net) -> int:
+    def train(self) -> int:
         """
         Train the neural network.
 
@@ -98,7 +92,7 @@ class SealyClient(fl.client.Client, ABC):
         pass
 
     @abstractmethod
-    def test(self, net) -> Tuple[int, float, Dict[str, Scalar]]:
+    def test(self) -> Tuple[int, float, Dict[str, Scalar]]:
         """
         Test the neural network.
 
@@ -125,8 +119,7 @@ class SealyClient(fl.client.Client, ABC):
     def get_parameters(self, ins: GetParametersIns) -> GetParametersRes:
         logging.info("Client %d: get_parameters", self.cid)
 
-        net = self.get_net()
-        params = self.get_params(net)
+        params = self.get_params()
 
         if not params:
             return GetParametersRes(
@@ -174,22 +167,20 @@ class SealyClient(fl.client.Client, ABC):
         logging.debug("Decrypted parameters for client %d", self.cid)
 
         # Unflatten parameters
-        net = self.get_net()
-        shapes = self.get_params_shape(net)
+        shapes = self.get_params_shape()
         unflat_params = unflatten_parameters(shapes, decrypted_parameters)
-
         # Set parameters
         logging.debug("Setting parameters for client %d", self.cid)
-        self.set_params(net, unflat_params)
+        self.set_params(unflat_params)
 
         # Train
         logging.debug("Training for client %d", self.cid)
-        num_examples = self.train(net)
+        num_examples = self.train()
         logging.debug("Trained for client %d", self.cid)
 
         # Get updated parameters
         logging.debug("Getting parameters for client %d", self.cid)
-        params = self.get_params(net)
+        params = self.get_params()
         updated_parameters = flatten_parameters(params)
         logging.debug("Got parameters for client %d", self.cid)
 
@@ -237,17 +228,16 @@ class SealyClient(fl.client.Client, ABC):
         logging.debug("Decrypted parameters for client %d", self.cid)
 
         # Unflatten parameters
-        net = self.get_net()
-        shapes = self.get_params_shape(net)
+        shapes = self.get_params_shape()
         unflat_params = unflatten_parameters(shapes, decrypted_parameters)
 
         # Set parameters
         logging.debug("Setting parameters for client %d", self.cid)
-        self.set_params(net, unflat_params)
+        self.set_params(unflat_params)
         logging.debug("Set parameters for client %d", self.cid)
 
         logging.debug("Testing for client %d", self.cid)
-        num_examples, loss, metrics = self.test(net)
+        num_examples, loss, metrics = self.test()
         logging.debug("Tested for client %d", self.cid)
 
         # Status

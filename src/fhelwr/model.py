@@ -26,6 +26,11 @@ def params_to_ciphertext(
     return cipher
 
 
+def get_torch_number_params(net) -> int:
+    shapes = get_torch_shapes(net)
+    return sum([np.prod(shape) for shape in shapes])  # type: ignore
+
+
 def get_torch_params(net) -> List[np.ndarray]:
     return [
         param.detach().cpu().numpy().flatten() for param in net.parameters()
@@ -34,6 +39,11 @@ def get_torch_params(net) -> List[np.ndarray]:
 
 def get_torch_shapes(net) -> List[np.ndarray]:
     return [param.shape for param in net.parameters()]
+
+
+def get_tensorflow_number_params(net) -> int:
+    shapes = get_tensorflow_shapes(net)
+    return sum([np.prod(shape) for shape in shapes])  # type: ignore
 
 
 def get_tensorflow_params(net) -> List[np.ndarray]:

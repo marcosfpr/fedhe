@@ -1,4 +1,5 @@
 import logging
+import time
 from collections.abc import Callable
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -99,6 +100,7 @@ class FedAvgSealy(fl.server.strategy.Strategy):
         self.accept_failures = accept_failures
         self.fit_metrics_aggregation_fn = fit_metrics_aggregation_fn
         self.evaluate_metrics_aggregation_fn = evaluate_metrics_aggregation_fn
+        self.aggregation_time = []
 
     def __repr__(self) -> str:
         return "FedSealy"
@@ -236,9 +238,12 @@ class FedAvgSealy(fl.server.strategy.Strategy):
         logging.info(
             f"Aggregating parameters from {len(weights_results)} clients..."
         )
+        start = time.time()
         aggregated_ndarrays = aggregate_ciphertext(
             self.context, weights_results, self.params_size
         )
+        end = time.time()
+        self.aggregation_time.append(end - start)
 
         parameters_aggregated = ciphertext_to_params(aggregated_ndarrays)
         logging.info(
@@ -293,3 +298,6 @@ class FedAvgSealy(fl.server.strategy.Strategy):
             logging.warning("No evaluate_metrics_aggregation_fn provided")
 
         return loss_aggregated, metrics_aggregated
+
+    def performance_history(self) -> Dict[str, List[float]]:
+        return {"aggregation_time": self.aggregation_time}

@@ -1,6 +1,8 @@
 import datasets
 import numpy as np
-from transformers import AutoModelForTokenClassification, BertTokenizerFast
+from datasets.arrow_dataset import deepcopy
+from transformers import (AutoModelForTokenClassification, BertTokenizerFast,
+                          TrainerCallback)
 
 
 def get_bert_tokenizer(model_name):
@@ -27,9 +29,9 @@ def tokenize_and_align_labels(tokenizer, examples, label_all_tokens=True):
     """
     tokenized_inputs = tokenizer(
         examples["tokens"],
-        truncation=True,
         is_split_into_words=True,
-        padding="max_length",
+        truncation=True,
+        padding=True,
     )
     labels = []
     for i, label in enumerate(examples["ner_tags"]):
@@ -99,3 +101,32 @@ def compute_metrics(label_list, eval_preds):
         "f1": results["overall_f1"],
         "accuracy": results["overall_accuracy"],
     }
+
+
+class LogMetricsCallback(TrainerCallback):
+    def __init__(self, trainer):
+        self._trainer = trainer
+        self.eval_metrics = []
+        self.train_metrics = []
+
+    def on_epoch_end(self, args, state, control, **kwargs):
+        if control.should_evaluate:
+            self._trainer.evaluate(
+                eval_dataset=self._trainer.train_dataset,
+                metric_key_prefix="train",
+            )
+            self._trainer.evaluate(
+                eval_dataset=self._trainer.eval_dataset,
+                metric_key_prefix="eval",
+            )
+
+    def on_evaluate(self, args, state, control, **kwargs):
+        metrics = kwargs.get("metrics", {})
+        epoch = state.epoch
+        metrics["epoch"] = epoch
+        if "eval_loss" in metrics:
+            self.eval_metrics.append(metrics)
+        elif "train_loss" in metrics:
+            self.train_metrics.append(metrics)
+        else:
+            raise ValueError("No valid metrics")

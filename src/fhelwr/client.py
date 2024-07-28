@@ -1,15 +1,14 @@
 import logging
+import time
 from abc import ABC, abstractmethod
-from datetime import time
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import flwr as fl
 import numpy as np
 from flwr.common import (Code, EvaluateIns, EvaluateRes, FitIns, FitRes,
-                         GetParametersIns, GetParametersRes, Scalar, Status)
-from sealy import (BatchDecryptor, BatchEncryptor, CiphertextBatchArray,
-                   CKKSBatchEncoder, Context)
-from sealy.sealy import PublicKey, SecretKey
+                         GetParametersIns, GetParametersRes, Parameters,
+                         Scalar, Status)
+from sealy import BatchDecryptor, BatchEncryptor, CiphertextBatchArray, Context
 
 from fhelwr.model import (ciphertext_to_params, flatten_parameters,
                           params_to_ciphertext, unflatten_parameters)
@@ -31,6 +30,11 @@ class SealyClient(fl.client.Client, ABC):
             cid: Client ID
         """
         self.cid = cid
+        self.encrypt_history = []
+        self.encode_history = []
+        self.decode_history = []
+        self.decrypt_history = []
+        self.bytes_sent = []
 
     @abstractmethod
     def get_ctx(self) -> Context:
@@ -107,13 +111,29 @@ class SealyClient(fl.client.Client, ABC):
         """
         Get the parameters of the neural network as an encrypted tensor.
         """
+        start = time.time()
         encoded = self.get_encoder().encode(parameters.tolist())
+        end = time.time()
+        self.encode_history.append(end - start)
+
+        start = time.time()
         encrypted = self.get_encryptor().encrypt(encoded)
+        end = time.time()
+        self.encrypt_history.append(end - start)
+
         return encrypted
 
     def __decrypt_params(self, encrypted: CiphertextBatchArray) -> np.ndarray:
+        start = time.time()
         decrypted = self.get_decryptor().decrypt(encrypted)
+        end = time.time()
+        self.decrypt_history.append(end - start)
+
+        start = time.time()
         decoded = np.asarray(self.get_encoder().decode(decrypted))
+        end = time.time()
+        self.decode_history.append(end - start)
+
         return decoded.flatten()
 
     def get_parameters(self, ins: GetParametersIns) -> GetParametersRes:
@@ -147,6 +167,8 @@ class SealyClient(fl.client.Client, ABC):
 
         # Status
         status = Status(code=Code.OK, message="Success")
+
+        self.bytes_sent.append(self.get_params_size_bytes(parameters))
 
         return GetParametersRes(parameters=parameters, status=status)
 
@@ -248,3 +270,18 @@ class SealyClient(fl.client.Client, ABC):
             status=status,
             metrics=metrics,
         )
+
+    def performance_history(self) -> Dict[str, List[float]]:
+        return {
+            "encrypt": self.encrypt_history,
+            "encode": self.encode_history,
+            "decode": self.decode_history,
+            "decrypt": self.decrypt_history,
+            "bytes_sent": self.bytes_sent,
+        }
+
+    def get_params_size_bytes(self, params: Parameters) -> int:
+        """
+        Get the size of the parameters in bytes.
+        """
+        return sum([len(param) for param in params.tensors])

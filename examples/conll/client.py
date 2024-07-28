@@ -5,6 +5,7 @@ from typing import Dict, List, OrderedDict, Tuple
 import datasets
 import flwr as fl
 import numpy as np
+import pandas as pd
 import torch
 from flwr.common import Scalar
 from sealy import (BatchDecryptor, BatchEncryptor, CKKSBatchEncoder,
@@ -15,7 +16,8 @@ from transformers import (DataCollatorForTokenClassification, Trainer,
                           TrainingArguments)
 
 from fhelwr.client import SealyClient
-from fhelwr.ext.ner.bert import (compute_metrics, get_bert_tokenizer,
+from fhelwr.ext.ner.bert import (LogMetricsCallback, compute_metrics,
+                                 get_bert_tokenizer,
                                  get_tiny_bert_model_for_classification,
                                  tokenize_and_align_labels)
 from fhelwr.model import get_torch_number_params
@@ -232,6 +234,11 @@ def fetch_secret_key(ctx, keys_dir):
     return secret_key
 
 
+def save_to_csv(metrics, filename):
+    df = pd.DataFrame(metrics)
+    df.to_csv(filename, index=False)
+
+
 if __name__ == "__main__":
     mps_device = torch.device("mps")
 
@@ -239,7 +246,7 @@ if __name__ == "__main__":
     logging.getLogger("fhelwr").setLevel(logging.DEBUG)
 
     # receive from command-line args the client id, the ip address of the server, and the port number
-    parser = argparse.ArgumentParser(description="SEALY CIFAR-10 Client")
+    parser = argparse.ArgumentParser(description="SEALY Client")
 
     parser.add_argument("--client-id", type=int, help="Client ID")
     parser.add_argument("--server-ip", type=str, help="Server IP address")
@@ -294,6 +301,9 @@ if __name__ == "__main__":
         compute_metrics=compute_metrics_impl,  # type: ignore
     )
 
+    logger_callback = LogMetricsCallback(trainer)
+    trainer.add_callback(logger_callback)
+
     print(f"number of parameters: {get_torch_number_params(trainer.model)})")
     print(f"trainable parameters: {trainer.get_num_trainable_parameters()}")
 
@@ -303,4 +313,17 @@ if __name__ == "__main__":
         server_address=f"{server_ip}:{server_port}",
         client=client,  # type: ignore
         grpc_max_message_length=2 * 536_870_912,
+    )
+
+    save_to_csv(
+        logger_callback.train_metrics,
+        f"results/federated/{client_id}_train_metrics.csv",
+    )
+    save_to_csv(
+        logger_callback.eval_metrics,
+        f"results/federated/{client_id}_eval_metrics.csv",
+    )
+    save_to_csv(
+        client.performance_history(),
+        f"results/federated/{client_id}_perf_metrics.csv",
     )

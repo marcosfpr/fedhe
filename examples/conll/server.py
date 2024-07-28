@@ -2,6 +2,7 @@ import logging
 from typing import List, Tuple
 
 import flwr as fl
+import pandas as pd
 import torch
 from flwr.common import Metrics
 from sealy import (CkksEncryptionParametersBuilder, CoefficientModulus,
@@ -49,6 +50,11 @@ def get_shared_model():
     return Trainer(ner_model, args)
 
 
+def save_to_csv(metrics, filename):
+    df = pd.DataFrame(metrics)
+    df.to_csv(filename, index=False)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
 
@@ -90,4 +96,9 @@ if __name__ == "__main__":
         config=fl.server.ServerConfig(num_rounds=5),
         strategy=strategy,
         grpc_max_message_length=2 * 536_870_912,
+    )
+
+    save_to_csv(
+        strategy.performance_history(),
+        f"results/federated/coordinator_perf_metrics.csv",
     )
